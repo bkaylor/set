@@ -88,6 +88,8 @@ char *get_color_name(Shading color)
 
 void generate_deck(Deck *deck)
 {
+    deck->card_count = 0;
+
     for (int shape_count = 0; shape_count < 3; shape_count += 1)
     {
         for (int shading_count = 0; shading_count < 3; shading_count += 1)
@@ -228,6 +230,8 @@ void generate_random_set_from_deck(Deck source, Deck *destination, int size)
     }
     */
 
+    destination->card_count = 0;
+
     int *ids = malloc(sizeof(int) * size);
 
     for (int i = 0; i < size; i += 1)
@@ -339,6 +343,12 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     SDL_RenderFillRect(renderer, NULL);
 
     draw_text(renderer, 0, 0, "Testing set", font, font_color);
+
+    char progress_text[50];
+    sprintf(progress_text, "%d/%d", game_state.sets_found, game_state.sets_in_this_board);
+    draw_text(renderer, 0, 15, progress_text, font, font_color);
+
+    SDL_RenderPresent(renderer);
 }
 
 
@@ -384,7 +394,6 @@ int main(int argc, char *argv[])
 
     Game_State game_state;
     generate_deck(&game_state.deck);
-    // game_state.board = set;
     game_state.quit = false;
     game_state.reset = true;
 
