@@ -188,7 +188,7 @@ int find_sets(Deck deck)
 {
     int sets_count = 0;
 
-    Set sets[1500]; // The full deck has 1080 so this should be fine.
+    Set sets[1200]; // The full deck has 1080 so this should be fine.
 
     for (int i = 0; i < deck.card_count; i += 1)
     {
@@ -294,7 +294,7 @@ void set_color(SDL_Surface *surface, SDL_Color color)
     {
         if (pixels[i] == SDL_MapRGB(surface->format, 0, 0, 0)) 
         {
-            pixels[i] = SDL_MapRGB(surface->format, color.r, color.b, color.g);
+            pixels[i] = SDL_MapRGB(surface->format, color.r, color.g, color.b);
         }
     }
 }
@@ -487,7 +487,7 @@ void update(Game_State *game_state, float delta_t)
                 game_state->board.cards[i].selected = true;
 
                 if (game_state->candidate_set_length == 3) {
-                    if (is_set(game_state->board, 
+                    if (is_set(game_state->deck, 
                            game_state->candidate_set.ids[0], 
                            game_state->candidate_set.ids[1], 
                            game_state->candidate_set.ids[2])) {
@@ -495,7 +495,7 @@ void update(Game_State *game_state, float delta_t)
                     }
 
                     reset_candidate_set(game_state);
-                    break;
+                    // break;
                 }
 
                 printf("Clicked: \n");
@@ -527,7 +527,7 @@ void draw_shape(SDL_Renderer *renderer, SDL_Rect shape_rect, int texture_index)
     SDL_RenderCopy(renderer, textures[texture_index], NULL, &shape_rect);
 }
 
-void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card)
+void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card, TTF_Font *font)
 {
     // Card background
     if (card.selected) {
@@ -563,6 +563,14 @@ void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card)
 
         draw_shape(renderer, shape_rect, card.texture_index);
     }
+
+    /*
+    // Draw shape description
+    SDL_Color card_font_color = {0,0,0,0};
+    char card_description[50];
+    sprintf(card_description, "%d: %d %s %s %s", card.id, card.number, get_shading_name(card.shading), get_color_name(card.color), get_shape_name(card.shape));
+    draw_text(renderer, card_rect.x, card_rect.y, card_description, font, card_font_color);
+    */
 }
 
 void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_Color font_color)
@@ -573,11 +581,9 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderFillRect(renderer, NULL);
 
-    draw_text(renderer, 0, 0, "Testing set", font, font_color);
-
     char progress_text[50];
     sprintf(progress_text, "%d/%d", game_state.sets_found, game_state.sets_in_this_board);
-    draw_text(renderer, 0, 15, progress_text, font, font_color);
+    draw_text(renderer, 3, 3, progress_text, font, font_color);
 
     // Draw the board
     float board_padding = 0.05f;
@@ -590,7 +596,10 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     {
         for (int j = 0; j < rows; j += 1)
         {
-            draw_card(renderer, game_state.board.cards[card_id].card_rect, game_state.board.cards[card_id]);
+            draw_card(renderer, 
+                      game_state.board.cards[card_id].card_rect, 
+                      game_state.board.cards[card_id], 
+                      font);
             card_id += 1;
         }
     }
