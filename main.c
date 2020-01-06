@@ -31,7 +31,11 @@ typedef struct Card {
     Color color;
     int number;
 
+    SDL_Rect card_rect;
+    bool selected;
+
     int id;
+    int texture_index;
 } Card;
 
 typedef struct Deck {
@@ -50,7 +54,15 @@ typedef struct Vector_2 {
 typedef struct Game_State {
     Deck deck;
     Deck board;
+
+    Vector_2 mouse_position;
+    bool mouse_left_click;
+    bool mouse_right_click;
+    Set candidate_set;
+    int candidate_set_length;
+
     Vector_2 window; 
+    SDL_Rect board_rect;
 
     int sets_in_this_board;
     int sets_found;
@@ -90,6 +102,8 @@ void generate_deck(Deck *deck)
 {
     deck->card_count = 0;
 
+    int texture_index = 0;
+
     for (int shape_count = 0; shape_count < 3; shape_count += 1)
     {
         for (int shading_count = 0; shading_count < 3; shading_count += 1)
@@ -105,8 +119,15 @@ void generate_deck(Deck *deck)
 
                     deck->cards[deck->card_count].id = deck->card_count;
 
+                    deck->cards[deck->card_count].texture_index = texture_index;
+
+                    deck->cards[deck->card_count].selected = false;
+
                     deck->card_count += 1;
                 }
+
+
+                texture_index += 1;
             }
         }
     }
@@ -263,10 +284,73 @@ void generate_random_set_from_deck(Deck source, Deck *destination, int size)
 
 }
 
+SDL_Texture *textures[27];
+
+void set_color(SDL_Surface *surface, SDL_Color color)
+{
+    int *pixels = surface->pixels;
+
+    for (int i = 0; i < surface->w * surface->h; i += 1)
+    {
+        if (pixels[i] == SDL_MapRGB(surface->format, 0, 0, 0)) 
+        {
+            pixels[i] = SDL_MapRGB(surface->format, color.r, color.b, color.g);
+        }
+    }
+}
+
+void load_this_image_all_colors(SDL_Renderer *renderer, char *filename, int *index)
+{
+    SDL_Surface *base_surface, *red_surface, *green_surface, *purple_surface;
+
+    SDL_Color red = {234, 28, 45, 0};
+    SDL_Color green = {0, 169, 80, 0}; 
+    SDL_Color purple = {97, 51, 148, 0}; 
+
+    base_surface = IMG_Load(filename);
+
+    red_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
+    green_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
+    purple_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
+
+    set_color(red_surface, red);
+    set_color(green_surface, green);
+    set_color(purple_surface, purple);
+
+    textures[*index] = SDL_CreateTextureFromSurface(renderer, red_surface);
+    SDL_FreeSurface(red_surface);
+    *index += 1;
+
+    textures[*index] = SDL_CreateTextureFromSurface(renderer, green_surface);
+    SDL_FreeSurface(green_surface);
+    *index += 1;
+
+    textures[*index] = SDL_CreateTextureFromSurface(renderer, purple_surface);
+    SDL_FreeSurface(purple_surface);
+    *index += 1;
+}
+
+void load_images(SDL_Renderer *renderer)
+{
+    int index = 0;
+
+    load_this_image_all_colors(renderer, "../assets/open_diamond.png", &index);
+    load_this_image_all_colors(renderer, "../assets/striped_diamond.png", &index);
+    load_this_image_all_colors(renderer, "../assets/solid_diamond.png", &index);
+    load_this_image_all_colors(renderer, "../assets/open_squiggle.png", &index);
+    load_this_image_all_colors(renderer, "../assets/striped_squiggle.png", &index);
+    load_this_image_all_colors(renderer, "../assets/solid_squiggle.png", &index);
+    load_this_image_all_colors(renderer, "../assets/open_oval.png", &index);
+    load_this_image_all_colors(renderer, "../assets/striped_oval.png", &index);
+    load_this_image_all_colors(renderer, "../assets/solid_oval.png", &index);
+}
+
 void get_input(Game_State *game_state)
 {
-    int x, y;
-    SDL_GetMouseState(&x, &y);
+    SDL_GetMouseState(&game_state->mouse_position.x, &game_state->mouse_position.y);
+
+    game_state->mouse_left_click = false; 
+    game_state->mouse_right_click = false; 
 
     // Handle events.
     SDL_Event event;
@@ -294,9 +378,11 @@ void get_input(Game_State *game_state)
             case SDL_MOUSEBUTTONDOWN:
 
                 if (event.button.button == SDL_BUTTON_LEFT ) {
+                    game_state->mouse_left_click = true;
                 }
 
                 if (event.button.button == SDL_BUTTON_RIGHT ) {
+                    game_state->mouse_right_click = true;
                 }
                 break;
 
@@ -307,6 +393,119 @@ void get_input(Game_State *game_state)
             default:
                 break;
         }
+    }
+}
+
+SDL_Rect get_board_rect(Game_State game_state)
+{
+    float board_padding = 0.05f;
+
+    SDL_Rect board_rect = {
+        game_state.window.x * board_padding,
+        game_state.window.y * board_padding,
+        game_state.window.x * (1.0f - 2*board_padding),
+        game_state.window.y * (1.0f - 2*board_padding),
+    };
+
+    return board_rect;
+}
+
+void set_card_rects(Game_State *game_state)
+{
+    int rows = 3, columns = 4;
+    float card_padding = 0.05f;
+
+    SDL_Rect board_rect = game_state->board_rect;
+
+    int card_id = 0;
+    for (int i = 0; i < columns; i += 1)
+    {
+        for (int j = 0; j < rows; j += 1)
+        {
+            SDL_Rect card_rect = {
+                board_rect.x + (board_rect.w/columns) * i + (board_rect.w/columns) * card_padding,
+                board_rect.y + (board_rect.h/rows) * j + (board_rect.h/rows) * card_padding,
+                (board_rect.w/columns) - (board_rect.w/columns) * card_padding * 2,  
+                (board_rect.h/rows) - (board_rect.h/rows) * card_padding * 2,
+            };
+
+            game_state->board.cards[card_id].card_rect = card_rect;
+            card_id += 1;
+        }
+    }
+}
+
+void reset_candidate_set(Game_State *game_state)
+{
+    for (int i = 0; i < game_state->candidate_set_length; i += 1)
+    {
+        int id_to_find = game_state->candidate_set.ids[i];
+
+        for (int j = 0; j < game_state->board.card_count; j += 1)
+        {
+            if (game_state->board.cards[j].id == id_to_find) {
+                game_state->board.cards[j].selected = false;
+                break;
+            }
+
+        }
+    }
+
+    game_state->candidate_set_length = 0;
+}
+
+void update(Game_State *game_state, float delta_t)
+{
+    if (game_state->reset) {
+        generate_random_set_from_deck(game_state->deck, &game_state->board, 12);
+        game_state->sets_in_this_board = find_sets(game_state->board);
+        game_state->sets_found = 0;
+
+        game_state->board_rect = get_board_rect(*game_state); 
+        set_card_rects(game_state);
+
+        reset_candidate_set(game_state);
+
+        game_state->reset = false;
+    }
+
+    if (game_state->mouse_left_click) {
+        for (int i = 0; i < 12; i += 1)
+        {
+            SDL_Rect mouse_position_rect = {
+                game_state->mouse_position.x,
+                game_state->mouse_position.y,
+                1,
+                1
+            };
+
+            SDL_Rect intersection_rect;
+            if (SDL_IntersectRect(&mouse_position_rect, &game_state->board.cards[i].card_rect, &intersection_rect)) {
+                game_state->candidate_set.ids[game_state->candidate_set_length] = game_state->board.cards[i].id;
+                game_state->candidate_set_length += 1;
+
+                game_state->board.cards[i].selected = true;
+
+                if (game_state->candidate_set_length == 3) {
+                    if (is_set(game_state->board, 
+                           game_state->candidate_set.ids[0], 
+                           game_state->candidate_set.ids[1], 
+                           game_state->candidate_set.ids[2])) {
+                        game_state->sets_found += 1;
+                    }
+
+                    reset_candidate_set(game_state);
+                    break;
+                }
+
+                printf("Clicked: \n");
+                print_card(game_state->board.cards[i]);
+            }
+        }
+    }
+
+    if (game_state->mouse_right_click) {
+        reset_candidate_set(game_state);
     }
 }
 
@@ -323,14 +522,46 @@ void draw_text(SDL_Renderer *renderer, int x, int y, char *string, TTF_Font *fon
     SDL_DestroyTexture(texture);
 }
 
-void update(Game_State *game_state, float delta_t)
+void draw_shape(SDL_Renderer *renderer, SDL_Rect shape_rect, int texture_index)
 {
-    if (game_state->reset) {
-        generate_random_set_from_deck(game_state->deck, &game_state->board, 12);
-        game_state->sets_in_this_board = find_sets(game_state->board);
-        game_state->sets_found = 0;
+    SDL_RenderCopy(renderer, textures[texture_index], NULL, &shape_rect);
+}
 
-        game_state->reset = false;
+void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card)
+{
+    // Card background
+    if (card.selected) {
+        SDL_SetRenderDrawColor(renderer, 255, 200, 255, 0);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 0);
+    }
+    SDL_RenderFillRect(renderer, &card_rect);
+
+    // Shapes
+    float outer_padding = 0.05f;
+    float inter_card_padding = 0.03f;
+
+    int inter_card_padding_px = card_rect.h * inter_card_padding;
+
+    SDL_Rect shape_rect;
+    shape_rect.w = card_rect.w  - (card_rect.w * outer_padding * 2);
+    shape_rect.h = (card_rect.h - (outer_padding * card_rect.h) - (3 * inter_card_padding_px)) / 3;
+
+    for (int i = 0; i < card.number; i += 1)
+    {
+        shape_rect.x = card_rect.x + card_rect.w * outer_padding;
+        shape_rect.y = card_rect.y + card_rect.h * outer_padding;
+
+        shape_rect.y += shape_rect.h * i;
+        shape_rect.y += inter_card_padding_px * i;
+
+        if (card.number == 1) {
+            shape_rect.y += shape_rect.h;
+        } else if (card.number == 2) {
+            shape_rect.y += shape_rect.h * 0.5;
+        }
+
+        draw_shape(renderer, shape_rect, card.texture_index);
     }
 }
 
@@ -347,6 +578,22 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     char progress_text[50];
     sprintf(progress_text, "%d/%d", game_state.sets_found, game_state.sets_in_this_board);
     draw_text(renderer, 0, 15, progress_text, font, font_color);
+
+    // Draw the board
+    float board_padding = 0.05f;
+    int rows = 3, columns = 4;
+
+    float card_padding = 0.05f;
+
+    int card_id = 0;
+    for (int i = 0; i < columns; i += 1)
+    {
+        for (int j = 0; j < rows; j += 1)
+        {
+            draw_card(renderer, game_state.board.cards[card_id].card_rect, game_state.board.cards[card_id]);
+            card_id += 1;
+        }
+    }
 
     SDL_RenderPresent(renderer);
 }
@@ -373,7 +620,7 @@ int main(int argc, char *argv[])
 	SDL_Window *window = SDL_CreateWindow("Set",
 			SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED,
-			600, 800,
+			800, 800,
 			SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
 	// Setup renderer
@@ -388,6 +635,7 @@ int main(int argc, char *argv[])
 		return -666;
 	}
 	SDL_Color font_color = {255, 255, 255};
+    load_images(renderer);
 
     printf("Set\n");
     srand(time(NULL));
