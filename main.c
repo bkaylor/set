@@ -65,7 +65,8 @@ typedef struct Game_State {
     SDL_Rect board_rect;
 
     int sets_in_this_board;
-    int sets_found;
+    int sets_found_count;
+    Set sets_found[20]; // TODO(bkaylor): Draw these somewhere
 
     bool quit;
     bool reset;
@@ -454,12 +455,41 @@ void reset_candidate_set(Game_State *game_state)
     game_state->candidate_set_length = 0;
 }
 
+bool sets_are_equal(Set candidate_set, Set found_set)
+{
+    int matches = 0;
+
+    if (candidate_set.ids[0] == found_set.ids[0] ||
+        candidate_set.ids[0] == found_set.ids[1] ||
+        candidate_set.ids[0] == found_set.ids[2]) {
+        matches += 1;
+    }
+
+    if (candidate_set.ids[1] == found_set.ids[0] ||
+        candidate_set.ids[1] == found_set.ids[1] ||
+        candidate_set.ids[1] == found_set.ids[2]) {
+        matches += 1;
+    }
+
+    if (candidate_set.ids[2] == found_set.ids[0] ||
+        candidate_set.ids[2] == found_set.ids[1] ||
+        candidate_set.ids[2] == found_set.ids[2]) {
+        matches += 1;
+    }
+
+    if (matches == 3) {
+        return true;
+    }
+
+    return false;
+}
+
 void update(Game_State *game_state, float delta_t)
 {
     if (game_state->reset) {
         generate_random_set_from_deck(game_state->deck, &game_state->board, 12);
         game_state->sets_in_this_board = find_sets(game_state->board);
-        game_state->sets_found = 0;
+        game_state->sets_found_count = 0;
 
         game_state->board_rect = get_board_rect(*game_state); 
         set_card_rects(game_state);
@@ -481,6 +511,8 @@ void update(Game_State *game_state, float delta_t)
 
             SDL_Rect intersection_rect;
             if (SDL_IntersectRect(&mouse_position_rect, &game_state->board.cards[i].card_rect, &intersection_rect)) {
+                if (game_state->board.cards[i].selected) continue;
+
                 game_state->candidate_set.ids[game_state->candidate_set_length] = game_state->board.cards[i].id;
                 game_state->candidate_set_length += 1;
 
@@ -491,7 +523,22 @@ void update(Game_State *game_state, float delta_t)
                            game_state->candidate_set.ids[0], 
                            game_state->candidate_set.ids[1], 
                            game_state->candidate_set.ids[2])) {
-                        game_state->sets_found += 1;
+
+                        bool is_duplicate_set = false;
+                        for (int j = 0; j < game_state->sets_found_count; j += 1)
+                        {
+                            if (sets_are_equal(game_state->candidate_set, game_state->sets_found[j])) {
+                                is_duplicate_set = true;
+                                break;
+                            }
+                        }
+
+                        if (!is_duplicate_set) {
+                            game_state->sets_found[game_state->sets_found_count].ids[0] = game_state->candidate_set.ids[0];
+                            game_state->sets_found[game_state->sets_found_count].ids[1] = game_state->candidate_set.ids[1];
+                            game_state->sets_found[game_state->sets_found_count].ids[2] = game_state->candidate_set.ids[2];
+                            game_state->sets_found_count += 1;
+                        }
                     }
 
                     reset_candidate_set(game_state);
@@ -582,7 +629,7 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     SDL_RenderFillRect(renderer, NULL);
 
     char progress_text[50];
-    sprintf(progress_text, "%d/%d", game_state.sets_found, game_state.sets_in_this_board);
+    sprintf(progress_text, "%d/%d", game_state.sets_found_count, game_state.sets_in_this_board);
     draw_text(renderer, 3, 3, progress_text, font, font_color);
 
     // Draw the board
