@@ -297,6 +297,11 @@ void set_color(SDL_Surface *surface, SDL_Color color)
         {
             pixels[i] = SDL_MapRGB(surface->format, color.r, color.g, color.b);
         }
+
+        if (pixels[i] == SDL_MapRGB(surface->format, 255, 255, 255)) 
+        {
+            pixels[i] = SDL_MapRGBA(surface->format, 255, 255, 255, 255);
+        }
     }
 }
 
