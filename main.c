@@ -63,6 +63,7 @@ typedef struct Game_State {
 
     Vector_2 window; 
     SDL_Rect board_rect;
+    SDL_Rect sidebar_rect;
 
     int sets_in_this_board;
     int sets_found_count;
@@ -402,14 +403,28 @@ void get_input(Game_State *game_state)
     }
 }
 
+SDL_Rect get_sidebar_rect(Game_State game_state)
+{
+    float sidebar_padding = 0.03f;
+
+    SDL_Rect sidebar_rect = {
+        game_state.window.x * sidebar_padding,
+        game_state.window.y * sidebar_padding,
+        game_state.window.x * 0.15f,
+        game_state.window.y * (1.0f - 2*sidebar_padding),
+    };
+
+    return sidebar_rect;
+}
+
 SDL_Rect get_board_rect(Game_State game_state)
 {
-    float board_padding = 0.05f;
+    float board_padding = 0.02f;
 
     SDL_Rect board_rect = {
-        game_state.window.x * board_padding,
+        (game_state.sidebar_rect.x + game_state.sidebar_rect.w) +(game_state.window.x * board_padding),
         game_state.window.y * board_padding,
-        game_state.window.x * (1.0f - 2*board_padding),
+        game_state.window.x * (1.0f - 2*board_padding) - (game_state.sidebar_rect.x + game_state.sidebar_rect.w),
         game_state.window.y * (1.0f - 2*board_padding),
     };
 
@@ -496,6 +511,7 @@ void update(Game_State *game_state, float delta_t)
         game_state->sets_in_this_board = find_sets(game_state->board);
         game_state->sets_found_count = 0;
 
+        game_state->sidebar_rect = get_sidebar_rect(*game_state);
         game_state->board_rect = get_board_rect(*game_state); 
         set_card_rects(game_state);
 
@@ -562,7 +578,7 @@ void update(Game_State *game_state, float delta_t)
 }
 
 void draw_text(SDL_Renderer *renderer, int x, int y, char *string, TTF_Font *font, SDL_Color font_color) {
-    SDL_Surface *surface = TTF_RenderText_Solid(font, string, font_color);
+    SDL_Surface *surface = TTF_RenderText_Blended(font, string, font_color);
     SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, surface);
     int x_from_texture, y_from_texture;
     SDL_QueryTexture(texture, NULL, NULL, &x_from_texture, &y_from_texture);
@@ -633,16 +649,47 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 0);
     SDL_RenderFillRect(renderer, NULL);
 
+    // Draw progress
     char progress_text[50];
     sprintf(progress_text, "%d/%d", game_state.sets_found_count, game_state.sets_in_this_board);
     draw_text(renderer, 3, 3, progress_text, font, font_color);
 
+    // Draw the sidebar
+    SDL_SetRenderDrawColor(renderer, 50, 50, 50, 0);
+    SDL_RenderFillRect(renderer, &game_state.sidebar_rect);
+
+    for (int i = 0; i < game_state.sets_found_count; i += 1)
+    {
+        Set this_set = game_state.sets_found[i];
+        for (int j = 0; j < 3; j += 1)
+        {
+            SDL_Rect sidebar_rect = game_state.sidebar_rect;
+
+            int sidebar_rows = game_state.sets_in_this_board < 8 ? 8 : game_state.sets_in_this_board;
+            int sidebar_columns = 3;
+
+            int sidebar_set_outer_padding = 5;
+            int sidebar_set_card_padding = 3;
+
+            int sidebar_set_height = (sidebar_rect.h - sidebar_rows * sidebar_set_outer_padding)  / sidebar_rows;
+            int sidebar_set_width = (sidebar_rect.w - sidebar_columns * sidebar_set_outer_padding) / sidebar_columns;
+
+            SDL_Rect sidebar_card_rect = {
+                sidebar_rect.x + sidebar_set_outer_padding + (j * sidebar_set_width) + (sidebar_set_card_padding * j),
+                sidebar_rect.y + sidebar_set_outer_padding + (i * sidebar_set_height) + (sidebar_set_card_padding * i),
+                sidebar_set_width,
+                sidebar_set_height,
+            };
+
+            int this_card_id = this_set.ids[j];
+            Card this_card = game_state.deck.cards[this_card_id];
+
+            draw_card(renderer, sidebar_card_rect, this_card, font);
+        }
+    }
+
     // Draw the board
-    float board_padding = 0.05f;
     int rows = 3, columns = 4;
-
-    float card_padding = 0.05f;
-
     int card_id = 0;
     for (int i = 0; i < columns; i += 1)
     {
@@ -681,7 +728,7 @@ int main(int argc, char *argv[])
 	SDL_Window *window = SDL_CreateWindow("Set",
 			SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED,
-			800, 800,
+			900, 800,
 			SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 
 	// Setup renderer
