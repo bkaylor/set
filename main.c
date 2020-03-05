@@ -301,7 +301,7 @@ void set_color(SDL_Surface *surface, SDL_Color color)
 
         if (pixels[i] == SDL_MapRGB(surface->format, 255, 255, 255)) 
         {
-            pixels[i] = SDL_MapRGBA(surface->format, 255, 255, 255, 255);
+            pixels[i] = SDL_MapRGBA(surface->format, 255, 255, 255, 0);
         }
     }
 }
@@ -325,14 +325,17 @@ void load_this_image_all_colors(SDL_Renderer *renderer, char *filename, int *ind
     set_color(purple_surface, purple);
 
     textures[*index] = SDL_CreateTextureFromSurface(renderer, red_surface);
+    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
     SDL_FreeSurface(red_surface);
     *index += 1;
 
     textures[*index] = SDL_CreateTextureFromSurface(renderer, green_surface);
+    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
     SDL_FreeSurface(green_surface);
     *index += 1;
 
     textures[*index] = SDL_CreateTextureFromSurface(renderer, purple_surface);
+    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
     SDL_FreeSurface(purple_surface);
     *index += 1;
 }
@@ -733,6 +736,9 @@ int main(int argc, char *argv[])
 
 	// Setup renderer
 	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+    // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
+    // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_MOD);
 
 	// Setup font
 	TTF_Init();
