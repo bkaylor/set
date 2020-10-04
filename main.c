@@ -510,8 +510,12 @@ bool sets_are_equal(Set candidate_set, Set found_set)
 void update(Game_State *game_state, float delta_t)
 {
     if (game_state->reset) {
-        generate_random_set_from_deck(game_state->deck, &game_state->board, 12);
-        game_state->sets_in_this_board = find_sets(game_state->board);
+        do 
+        {
+            generate_random_set_from_deck(game_state->deck, &game_state->board, 12);
+            game_state->sets_in_this_board = find_sets(game_state->board);
+        } while (game_state->sets_in_this_board < 1);
+
         game_state->sets_found_count = 0;
 
         game_state->sidebar_rect = get_sidebar_rect(*game_state);
