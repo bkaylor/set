@@ -8,21 +8,21 @@
 #include "SDL_image.h"
 
 typedef enum Shape {
-    SHAPE_DIAMOND,
-    SHAPE_SQUIGGLE,
-    SHAPE_OVAL
+    SHAPE_DIAMOND  = 0,
+    SHAPE_OVAL     = 1,
+    SHAPE_SQUIGGLE = 2,
 } Shape;
 
 typedef enum Shading {
-    SHADING_OPEN,
-    SHADING_STRIPED,
-    SHADING_SOLID
+    SHADING_OPEN    = 0,
+    SHADING_SOLID   = 1,
+    SHADING_STRIPED = 2,
 } Shading;
 
 typedef enum Color {
-    COLOR_RED,
-    COLOR_GREEN,
-    COLOR_PURPLE
+    COLOR_RED    = 0,
+    COLOR_GREEN  = 1,
+    COLOR_PURPLE = 2,
 } Color;
 
 typedef struct Card {
@@ -36,6 +36,8 @@ typedef struct Card {
 
     int id;
     int texture_index;
+
+    SDL_Rect texture_rect;
 } Card;
 
 typedef struct Deck {
@@ -67,7 +69,9 @@ typedef struct Game_State {
 
     int sets_in_this_board;
     int sets_found_count;
-    Set sets_found[20]; // TODO(bkaylor): Draw these somewhere
+    Set sets_found[20];
+
+    bool hint;
 
     bool quit;
     bool reset;
@@ -100,17 +104,22 @@ char *get_color_name(Shading color)
     return "NO COLOR";
 }
 
+void print_card(Card card)
+{
+    printf("%d: %d %s %s %s\n", card.id, card.number, get_shading_name(card.shading), get_color_name(card.color), get_shape_name(card.shape));
+}
+
 void generate_deck(Deck *deck)
 {
     deck->card_count = 0;
 
     int texture_index = 0;
 
-    for (int shape_count = 0; shape_count < 3; shape_count += 1)
+    for (int color_count = 0; color_count < 3; color_count += 1)
     {
         for (int shading_count = 0; shading_count < 3; shading_count += 1)
         {
-            for (int color_count = 0; color_count < 3; color_count += 1)
+            for (int shape_count = 0; shape_count < 3; shape_count += 1)
             {
                 for (int number_count = 1; number_count <= 3; number_count += 1)
                 {
@@ -122,22 +131,25 @@ void generate_deck(Deck *deck)
                     deck->cards[deck->card_count].id = deck->card_count;
 
                     deck->cards[deck->card_count].texture_index = texture_index;
+                    deck->cards[deck->card_count].texture_rect = (SDL_Rect) {
+                        132 * (texture_index % 9),
+                        64 *  ((texture_index / 9) + 1),
+                        132,
+                        64,
+                    };
+
 
                     deck->cards[deck->card_count].selected = false;
 
+                    print_card(deck->cards[deck->card_count]);
+
                     deck->card_count += 1;
                 }
-
 
                 texture_index += 1;
             }
         }
     }
-}
-
-void print_card(Card card)
-{
-    printf("%d: %d %s %s %s\n", card.id, card.number, get_shading_name(card.shading), get_color_name(card.color), get_shape_name(card.shape));
 }
 
 void print_deck(Deck deck)
@@ -286,124 +298,13 @@ void generate_random_set_from_deck(Deck source, Deck *destination, int size)
 
 }
 
-SDL_Texture *textures[27];
+SDL_Texture *texture;
 
-void set_color(SDL_Surface *surface, SDL_Color color)
+void load_image(SDL_Renderer *renderer)
 {
-    int *pixels = surface->pixels;
-
-    for (int i = 0; i < surface->w * surface->h; i += 1)
-    {
-        if (pixels[i] == SDL_MapRGB(surface->format, 0, 0, 0)) 
-        {
-            pixels[i] = SDL_MapRGB(surface->format, color.r, color.g, color.b);
-        }
-
-        if (pixels[i] == SDL_MapRGB(surface->format, 255, 255, 255)) 
-        {
-            pixels[i] = SDL_MapRGBA(surface->format, 255, 255, 255, 0);
-        }
-    }
-}
-
-void load_this_image_all_colors(SDL_Renderer *renderer, char *filename, int *index)
-{
-    SDL_Surface *base_surface, *red_surface, *green_surface, *purple_surface;
-
-    SDL_Color red = {234, 28, 45, 0};
-    SDL_Color green = {0, 169, 80, 0}; 
-    SDL_Color purple = {97, 51, 148, 0}; 
-
-    base_surface = IMG_Load(filename);
-
-    red_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
-    green_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
-    purple_surface = SDL_ConvertSurface(base_surface, base_surface->format, SDL_SWSURFACE);
-
-    set_color(red_surface, red);
-    set_color(green_surface, green);
-    set_color(purple_surface, purple);
-
-    textures[*index] = SDL_CreateTextureFromSurface(renderer, red_surface);
-    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
-    SDL_FreeSurface(red_surface);
-    *index += 1;
-
-    textures[*index] = SDL_CreateTextureFromSurface(renderer, green_surface);
-    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
-    SDL_FreeSurface(green_surface);
-    *index += 1;
-
-    textures[*index] = SDL_CreateTextureFromSurface(renderer, purple_surface);
-    SDL_SetTextureBlendMode(textures[*index], SDL_BLENDMODE_BLEND);
-    SDL_FreeSurface(purple_surface);
-    *index += 1;
-}
-
-void load_images(SDL_Renderer *renderer)
-{
-    int index = 0;
-
-    load_this_image_all_colors(renderer, "../assets/open_diamond.png", &index);
-    load_this_image_all_colors(renderer, "../assets/striped_diamond.png", &index);
-    load_this_image_all_colors(renderer, "../assets/solid_diamond.png", &index);
-    load_this_image_all_colors(renderer, "../assets/open_squiggle.png", &index);
-    load_this_image_all_colors(renderer, "../assets/striped_squiggle.png", &index);
-    load_this_image_all_colors(renderer, "../assets/solid_squiggle.png", &index);
-    load_this_image_all_colors(renderer, "../assets/open_oval.png", &index);
-    load_this_image_all_colors(renderer, "../assets/striped_oval.png", &index);
-    load_this_image_all_colors(renderer, "../assets/solid_oval.png", &index);
-}
-
-void get_input(Game_State *game_state)
-{
-    SDL_GetMouseState(&game_state->mouse_position.x, &game_state->mouse_position.y);
-
-    game_state->mouse_left_click = false; 
-    game_state->mouse_right_click = false; 
-
-    // Handle events.
-    SDL_Event event;
-
-    while (SDL_PollEvent(&event))
-    {
-        switch (event.type)
-        {
-            case SDL_KEYDOWN:
-                switch (event.key.keysym.sym)
-                {
-                    case SDLK_ESCAPE:
-                        game_state->quit = true;
-                        break;
-
-                    case SDLK_r:
-                        game_state->reset = true;
-                        break;
-
-                    default:
-                        break;
-                }
-                break;
-
-            case SDL_MOUSEBUTTONDOWN:
-
-                if (event.button.button == SDL_BUTTON_LEFT ) {
-                    game_state->mouse_left_click = true;
-                }
-
-                if (event.button.button == SDL_BUTTON_RIGHT ) {
-                    game_state->mouse_right_click = true;
-                }
-                break;
-
-            case SDL_QUIT:
-                game_state->quit = true;
-                break;
-
-            default:
-                break;
-        }
-    }
+    SDL_Surface *spritesheet_surface = IMG_Load("../assets/v4/spritesheet.png");
+    texture = SDL_CreateTextureFromSurface(renderer, spritesheet_surface);
+    SDL_FreeSurface(spritesheet_surface);
 }
 
 SDL_Rect get_sidebar_rect(Game_State game_state)
@@ -425,7 +326,7 @@ SDL_Rect get_board_rect(Game_State game_state)
     float board_padding = 0.02f;
 
     SDL_Rect board_rect = {
-        (game_state.sidebar_rect.x + game_state.sidebar_rect.w) +(game_state.window.x * board_padding),
+        (game_state.sidebar_rect.x + game_state.sidebar_rect.w) + (game_state.window.x * board_padding),
         game_state.window.y * board_padding,
         game_state.window.x * (1.0f - 2*board_padding) - (game_state.sidebar_rect.x + game_state.sidebar_rect.w),
         game_state.window.y * (1.0f - 2*board_padding),
@@ -458,6 +359,71 @@ void set_card_rects(Game_State *game_state)
         }
     }
 }
+
+void get_input(SDL_Window *window, Game_State *game_state)
+{
+    SDL_GetMouseState(&game_state->mouse_position.x, &game_state->mouse_position.y);
+
+    game_state->mouse_left_click = false; 
+    game_state->mouse_right_click = false; 
+
+    // Handle events.
+    SDL_Event event;
+
+    while (SDL_PollEvent(&event))
+    {
+        switch (event.type)
+        {
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym)
+                {
+                    case SDLK_ESCAPE:
+                        game_state->quit = true;
+                        break;
+
+                    case SDLK_r:
+                        game_state->reset = true;
+                        break;
+
+                    case SDLK_h:
+                        game_state->hint = true;
+                        break;
+
+                    default:
+                        break;
+                }
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+
+                if (event.button.button == SDL_BUTTON_LEFT ) {
+                    game_state->mouse_left_click = true;
+                }
+
+                if (event.button.button == SDL_BUTTON_RIGHT ) {
+                    game_state->mouse_right_click = true;
+                }
+                break;
+
+            case SDL_WINDOWEVENT:
+                if (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                    SDL_GetWindowSize(window, &game_state->window.x, &game_state->window.y);
+                    game_state->sidebar_rect = get_sidebar_rect(*game_state);
+                    game_state->board_rect = get_board_rect(*game_state); 
+                    set_card_rects(game_state);
+                }
+                break;
+
+            case SDL_QUIT:
+                game_state->quit = true;
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
 
 void reset_candidate_set(Game_State *game_state)
 {
@@ -525,6 +491,10 @@ void update(Game_State *game_state, float delta_t)
         reset_candidate_set(game_state);
 
         game_state->reset = false;
+    }
+
+    if (game_state->hint) {
+        game_state->hint = false;
     }
 
     if (game_state->mouse_left_click) {
@@ -597,9 +567,9 @@ void draw_text(SDL_Renderer *renderer, int x, int y, char *string, TTF_Font *fon
     SDL_DestroyTexture(texture);
 }
 
-void draw_shape(SDL_Renderer *renderer, SDL_Rect shape_rect, int texture_index)
+void draw_shape(SDL_Renderer *renderer, SDL_Rect shape_rect, SDL_Rect texture_rect)
 {
-    SDL_RenderCopy(renderer, textures[texture_index], NULL, &shape_rect);
+    SDL_RenderCopy(renderer, texture, &texture_rect, &shape_rect);
 }
 
 void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card, TTF_Font *font)
@@ -636,7 +606,7 @@ void draw_card(SDL_Renderer *renderer, SDL_Rect card_rect, Card card, TTF_Font *
             shape_rect.y += shape_rect.h * 0.5;
         }
 
-        draw_shape(renderer, shape_rect, card.texture_index);
+        draw_shape(renderer, shape_rect, card.texture_rect);
     }
 
     /*
@@ -672,7 +642,7 @@ void render(SDL_Renderer *renderer, Game_State game_state, TTF_Font *font, SDL_C
         {
             SDL_Rect sidebar_rect = game_state.sidebar_rect;
 
-            int sidebar_rows = game_state.sets_in_this_board < 8 ? 8 : game_state.sets_in_this_board;
+            int sidebar_rows = game_state.sets_in_this_board < 10 ? 10 : game_state.sets_in_this_board;
             int sidebar_columns = 3;
 
             int sidebar_set_outer_padding = 5;
@@ -742,18 +712,17 @@ int main(int argc, char *argv[])
 	SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
     // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_ADD);
-    // SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_MOD);
 
 	// Setup font
 	TTF_Init();
-	TTF_Font *font = TTF_OpenFont("liberation.ttf", 16);
+	TTF_Font *font = TTF_OpenFont("Constantia.ttf", 16);
 	if (!font)
 	{
 		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Error: Font", TTF_GetError(), window);
 		return -666;
 	}
 	SDL_Color font_color = {255, 255, 255};
-    load_images(renderer);
+    load_image(renderer);
 
     printf("Set\n");
     srand(time(NULL));
@@ -762,6 +731,7 @@ int main(int argc, char *argv[])
     generate_deck(&game_state.deck);
     game_state.quit = false;
     game_state.reset = true;
+    game_state.hint = false;
 
     int frame_time_start, frame_time_finish;
     float delta_t = 0;
@@ -771,7 +741,7 @@ int main(int argc, char *argv[])
         frame_time_start = SDL_GetTicks();
 
         SDL_PumpEvents();
-        get_input(&game_state);
+        get_input(window, &game_state);
 
         if (!game_state.quit)
         {
